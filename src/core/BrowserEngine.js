@@ -204,9 +204,21 @@ class Element {
   }
 }
 
+class DocumentLayout {
+  constructor(node) {
+    this.node = node
+    this.parent = null
+    this.children = []
+  }
+
+  layout() {
+    const child = new Layout(this.node)
+  }
+}
+
 class Layout {
-  constructor(tokens, ctx, canvas) {
-    this.tokens = tokens
+  constructor(node, parent, previous) {
+    this.node = node
     this.display_list = []
     this.cursor_x = HSTEP
     this.cursor_y = VSTEP
@@ -216,7 +228,12 @@ class Layout {
     this.ctx = ctx
     this.canvas = canvas
 
-    this.recurse(tokens)
+    // Transforming into layout tree
+    this.parent = parent
+    this.previous = previous
+    this.children = []
+
+    this.recurse(node)
   }
 
   recurse(root) {
@@ -272,6 +289,8 @@ class Browser {
     this.httpClientInstance = new HttpClient('https://browser.engineering/')
     this.display_list = []
     this.scrollPosition = 0
+
+    this.document = {}
   }
 
   createText(x, y, text, color = 'black', style='', weight='', size = '20') {
@@ -357,7 +376,9 @@ class Browser {
     parser.printTree(parser.parse())
 
     const root = parser.parse()
-    this.display_list = new Layout(root, this.ctx, this.canvas).display_list
+
+    this.document = new Layout(root)
+    this.display_list = this.document.display_list
 
     this.draw()
   }
