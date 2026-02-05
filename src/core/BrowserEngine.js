@@ -13,9 +13,6 @@ window.addEventListener('resize', () => {
   draw();
 });
 
-// const SELF_CLOSING_TAGS = require('./constants/SELF_CLOSING_TAGS');
-// const HEAD_TAGS = require('./constants/HEAD_TAGS');
-
 const HSTEP = 15
 const VSTEP = 31
 
@@ -212,14 +209,23 @@ class DocumentLayout {
   }
 
   layout() {
-    const child = new Layout(this.node)
+    const child = new BlockLayout(this.node)
+    this.children.push(child)
+    child.layout()
+    this.display_list = child.display_list
   }
 }
 
-class Layout {
+class BlockLayout {
   constructor(node, parent, previous) {
+    // Transforming into layout tree
     this.node = node
+    this.parent = parent
+    this.previous = previous
+    this.children = []
     this.display_list = []
+
+    // styles
     this.cursor_x = HSTEP
     this.cursor_y = VSTEP
     this.style = 'normal'
@@ -228,12 +234,53 @@ class Layout {
     this.ctx = ctx
     this.canvas = canvas
 
-    // Transforming into layout tree
-    this.parent = parent
-    this.previous = previous
-    this.children = []
+    
 
-    this.recurse(node)
+    // this.recurse(node)
+  }
+
+  layoutIntermediate() {
+    let  previousNode = null
+
+    for (const child of this.node.children) {
+      const next = new BlockLayout(child, this.node, previousNode)
+      this.children.push(next)
+      previousNode = next
+    }
+  }
+
+  layout() {
+    const mode = this.layoutMode()
+
+    if (mode == 'block') {
+      let previous = null
+
+      for (const child of this.node.children) {
+        const next = new BlockLayout(child, this.node, previous)
+        this.children.push(next)
+        previous = next
+      }
+    } else {
+      this.recurse(this.node)
+    }
+  }
+
+  layoutMode() {
+    const hasBlockElements = this.node.children.some(child => 
+      child instanceof Element && 
+      BLOCK_ELEMENTS.includes(child.tag)
+    )
+
+    if (this.node instanceof Text) {
+      return 'inline'
+    } else if (hasBlockElements) {
+      return 'block'
+    }
+    else if (this.node.children) {
+      return 'inline'
+    } else {
+      return 'block'
+    }
   }
 
   recurse(root) {
@@ -299,48 +346,6 @@ class Browser {
     this.ctx.fillText(text, x, y);
   }
 
-  // show(body) {
-  //   let inTag = false
-
-  //   for (const character of body) {
-  //     if (character === "<") {
-  //       inTag = true
-  //     }
-  //     else if (character === ">") {
-  //       inTag = false
-  //     } else if (!inTag) {
-  //       process.stdout.write(character)
-  //     }
-  //   }
-  // }
-
-  // lex(body) {
-  //   let inTag = false
-  //   let buffer = ''
-  //   let out = []
-
-  //   for (const letter of body) {
-  //     if (letter === "<") {
-  //       inTag = true
-  //       if (buffer) out.push(new Text(buffer))
-  //       buffer = ""
-  //     }
-  //     else if (letter === ">") {
-  //       inTag = false
-  //       out.push(new Element(buffer))
-  //       buffer = ''
-  //     } else {
-  //       buffer += letter
-  //     }
-  //   }
-
-  //   if (!inTag && buffer) {
-  //     out.push(new Text(buffer))
-  //   }
-
-  //   return out
-  // }
-
   draw() {
     this.ctx.fillStyle = 'white';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -373,11 +378,12 @@ class Browser {
     // const tagOrTextToken = this.lex(result.body)
     const parser = new HTMLParser(result.body)
 
-    parser.printTree(parser.parse())
+    // parser.printTree(parser.parse())
 
     const root = parser.parse()
 
-    this.document = new Layout(root)
+    this.document = new BlockLayout(root)
+    this.document.layout()
     this.display_list = this.document.display_list
 
     this.draw()
